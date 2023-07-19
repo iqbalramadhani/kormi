@@ -1,0 +1,31 @@
+import React, {useMemo} from "react";
+import {AsideMenuList} from "../../../../../app/layouts/aside/AsideMenuList";
+import {useHtmlClassService} from "../../../_core/MetronicLayout";
+
+export function AsideMenu({disableScroll}) {
+  const uiService = useHtmlClassService();
+  const layoutProps = useMemo(() => {
+    return {
+      layoutConfig: uiService.config,
+      asideMenuAttr: uiService.getAttributes("aside_menu"),
+      ulClasses: uiService.getClasses("aside_menu_nav", true),
+      asideClassesFromConfig: uiService.getClasses("aside_menu", true)
+    };
+  }, [uiService]);
+
+  return (
+    <>
+      {/* begin::Menu Container */}
+      <div
+        id="kt_aside_menu"
+        data-menu-vertical="1"
+        // style={{background: '#C6E4FF'}}
+        className={`aside-menu my-4 ${layoutProps.asideClassesFromConfig}`}
+        {...layoutProps.asideMenuAttr}
+      >
+        <AsideMenuList layoutProps={layoutProps} />
+      </div>
+      {/* end::Menu Container */}
+    </>
+  );
+}

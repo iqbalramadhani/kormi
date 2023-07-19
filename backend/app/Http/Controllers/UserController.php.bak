@@ -1,0 +1,1002 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Admin;
+use App\Cities;
+use App\District;
+use App\JoinAdmin;
+use App\Library\Asset;
+use App\Library\Common;
+use App\Library\Curl;
+use App\Library\Mail;
+use App\Library\Response;
+use App\Library\SmsOtp;
+use App\MasterOrganitationParent;
+use App\MasterOrganitationStatus;
+use App\Otp;
+use App\Province;
+use App\RegisterPayment;
+use App\Setting;
+use App\User;
+use App\Village;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Laravel\Lumen\Routing\Controller as BaseController;
+
+class UserController extends BaseController
+{
+    public function __construct(Request $request)
+    {
+        $this->_validation($request);
+    }
+
+    private function _validation($request)
+    {
+        $app_id = isset($request->auth->app_id) ? $request->auth->app_id : '';
+        $data = [
+            'changePassword' => [
+                'password' => 'required|min:8|confirmed',
+                'old_password' => 'required|min:6',
+            ],
+            'profileUpdate' => [
+                'name' => 'required',
+            ],
+            'updateStatus' => [
+                'status' => 'in:-1,1',
+            ],
+            'joinAdmin' => [
+                'current_agency' => 'required',
+                'organizational_experience' => 'required',
+            ],
+            'sendOtp' => [
+                'to' => 'required',
+                'type' => 'required|in:register,forget_password',
+            ],
+            'create' => [
+                'city' => 'required|exists:cities,id',
+                'organitation_parent' => 'required',
+                'otp' => 'required',
+                'name' => 'required',
+                'password' => 'required|min:8|confirmed',
+            ],
+            'roleUpdate' => [
+                'role' => 'required',
+            ],
+            'updatemember' => [
+                'id' => 'exists:users,id',
+                'cities_id' => 'exists:cities,id',
+                'name' => 'required',
+            ],
+        ];
+
+        if (array_key_exists(Response::function(), $data)) {
+            $this->validate($request, $data[Response::function()]);
+        }
+    }
+
+    public function index(Request $request)
+    {
+        $perPage = env('TOTAL_PER_PAGE', 20);
+        if ($request->limit) {
+            $perPage = $request->limit;
+        }
+        $search = '%'.$request->search.'%';
+        $user = User::where('email', 'like', $search)->orWhere('name', 'like', $search)->paginate($perPage);
+        if (!$user) {
+            return Response::apiError('Not found data', []);
+        }
+        return Response::api('Search Success', $user);
+    }
+
+    public function profileUpdate(Request $request)
+    {
+        $update = [
+            'name' => $request->name,
+            // 'email' => $request->email,
+            'gender' => $request->gender,
+            'place_of_birth_text' => $request->place_of_birth_text,
+            'phone_number' => $request->phone_number,
+            'place_of_birth' => $request->place_of_birth && $request->place_of_birth != 'null' ? $request->place_of_birth : null,
+            'provinces_id' => $request->provinces_id && $request->provinces_id != 'null' ? $request->provinces_id : null,
+            'cities_id' => $request->cities_id && $request->cities_id != 'null' ? $request->cities_id : null,
+            'districts_id' => $request->districts_id && $request->districts_id != 'null' ? $request->districts_id : null,
+            'villages_id' => $request->villages_id && $request->villages_id != 'null' ? $request->villages_id : null,
+            'address' => $request->address,
+            'post_code' => $request->post_code,
+            'birth_date' => $request->birth_date && $request->birth_date != 'null' ? $request->birth_date : null,
+            'current_agency' => $request->current_agency,
+            'organizational_experience' => $request->organizational_experience,
+        ];
+
+        $user = User::where('id', $request->auth->id)->first();
+        $user->update($update);
+        if (!$user) {
+            return Response::apiError('Failed Update Profile', []);
+        }
+
+        return Response::api('Update Profile Success', $user);
+    }
+
+    public function updateStatus($id, Request $request)
+    {
+        $update = [
+            'status' => (int) $request->status,
+        ];
+
+        $user = User::where('id', $id)->first();
+        if (!$user) {
+            return Response::apiError('Failed Update Profile', []);
+        }
+        if ($user->status == 2 && $request->status == 1) {
+            $no_member = User::createNoMember($user->id, $user->cities_id);
+            $update['member_number'] = $no_member;
+        }
+        $user->update($update);
+
+        return Response::api('Update Profile Success', $user);
+    }
+
+    public function delete($id, Request $request)
+    {
+        $user = User::where('id', $id)->first();
+        if (!$user) {
+            return Response::apiError('Failed User Not Found', []);
+        }
+
+        if ($user->status == 1) {
+            return Response::apiError('Failed Delete User Active', []);
+        }
+
+        $user->delete();
+
+        return Response::api('Delete User Success', true);
+    }
+
+    public function roleUpdate($id, Request $request)
+    {
+        $update = [
+            'role' => $request->role,
+        ];
+
+        $user = User::where('id', $id)->first();
+        $user->update($update);
+        if (!$user) {
+            return Response::apiError('Failed Update Profile', []);
+        }
+
+        return Response::api('Update Profile Success', $user);
+    }
+
+    public function avatarUpdate(Request $request)
+    {
+        $imagePathName = Asset::setPath($request->auth->id, 'avatar', $request->auth->id.'.png');
+        $avatar = $request->avatar;
+        $avatar = explode(',', $avatar);
+        $avatar = Asset::uploadImage($imagePathName, $avatar[1], true);
+
+        $update = [
+            'avatar' => $avatar,
+        ];
+
+        $user = User::where('id', $request->auth->id)->first();
+
+        $user->update($update);
+        if (!$user) {
+            return Response::apiError('Failed Update Profile', []);
+        }
+
+        return Response::api('Update Profile Success', $user);
+    }
+
+    public function detailRegister()
+    {
+        return Response::api('Success Load Data', ['amount' => (int) env('REGISTER_AMOUNT')]);
+    }
+
+    public function joinAdmin(Request $request)
+    {
+        $update = [
+            'current_agency' => $request->current_agency,
+            'current_job' => $request->current_job,
+            'organizational_experience' => $request->organizational_experience,
+        ];
+        $user = User::where('id', $request->auth->id)->first();
+
+        $user->update($update);
+        if (!$user) {
+            return Response::apiError('Failed Update Profile', []);
+        }
+
+        $joinAdmin = [
+            'user_id' => $request->auth->id,
+        ];
+
+        $create = JoinAdmin::updateOrCreate($joinAdmin);
+
+        return Response::api('Permintaan telah dikirm', $create);
+    }
+
+    public function sendOtp(Request $req)
+    {
+        // Validate email
+        $to = $req->to;
+        $type = $req->type;
+        $email = '';
+        $phone_number = '';
+        if (filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $email = $to;
+        } else {
+            $phone_number = $to;
+        }
+
+        $msg = 'Success';
+        $model = new User();
+        if (empty($email) && empty($phone_number)) {
+            return Response::apiError('Phone number atau email harus di isi', []);
+        }
+
+        if ($type == 'forget_password') {
+            $user = User::where('email', $to)->orWhere('phone_number', $to)->first();
+            if (!$user) {
+                return Response::apiError('Akun belum terdaftar', []);
+            }
+            if ($user->status != 1) {
+                return Response::apiError('Akun tidak aktif', []);
+            }
+        }
+
+        if (!empty($email)) {
+            $model = $model->where('email', $email);
+        }
+
+        if (!empty($phone_number)) {
+            $model = $model->orwhere('phone_number', $phone_number);
+        }
+
+        $user = $model->first();
+        if ($user) {
+            if ($user->status != 0 && $type == 'register') {
+                return Response::apiError('User sudah terdaftar', []);
+            }
+        }
+        $code = mt_rand(10000, 99999);
+
+        if (!empty($email)) {
+            $subject = 'Otp Pendaftaran';
+            if ($type == 'forget_password') {
+                $subject = 'Otp Reset Password';
+            }
+            $email = trim($email);
+            Otp::where('to', $email)->where('proccess', 'register')->delete();
+            Otp::create(['to' => $email, 'proccess' => $type, 'otp' => $code]);
+            $sendMail = Mail::to($email)
+                            ->template('email.otp', ['code' => $code])
+                            ->subject($subject)
+                            ->Send();
+
+            return Response::api($msg, $sendMail);
+        }
+
+        if (!empty($phone_number)) {
+            Otp::where('to', $phone_number)->where('proccess', 'register')->delete();
+            $content = 'otp untuk pendaftaran kormi {{otp}} otp ini hanya berlaku dalam 2 menit';
+            if ($type == 'forget_password') {
+                $content = 'otp untuk reset password kormi {{otp}} otp ini hanya berlaku dalam 2 menit';
+            }
+
+            $smsOtp = SmsOtp::phoneNumber($phone_number)
+                            ->key($code)
+                            ->expiredIn(120)
+                            ->content($content)
+                            ->send();
+            if ($smsOtp['type'] == 'success') {
+                Otp::create(['to' => $phone_number, 'proccess' => $type, 'otp' => $code]);
+            }
+
+            return Response::api($smsOtp['type'], $smsOtp);
+        }
+    }
+
+    public function create(Request $req)
+    {
+        $otp = $req->otp;
+        if (empty($req->email) && empty($req->phone_number)) {
+            return Response::apiError('Isi no hp atau Email', []);
+        }
+
+        $checkOtp = Otp::checkOtp($otp, 'register', $req->email, $req->phone_number);
+
+        if (!$checkOtp) {
+            return Response::apiError('otp salah', []);
+        }
+
+        $city = Cities::find($req->city);
+        $email = $req->email ? $req->email : '';
+        $phone_number = $req->phone_number ? $req->phone_number : '';
+        $userReq = [
+            'name' => $req->name,
+            'role' => 0, // before it was 1
+            'status' => 0,
+            'provinces_id' => $city->province_id,
+            'organitation_parent_id' => $req->organitation_parent,
+            'organitation_status_id' => 0,
+            'cities_id' => $req->city,
+            'email' => $email,
+            'phone_number' => $phone_number,
+            'password' => Hash::make($req->password),
+        ];
+
+        $model = new User();
+
+        if (!empty($email)) {
+            $model = $model->where('email', $email);
+        }
+
+        if (!empty($phone_number)) {
+            $model = $model->where('phone_number', $phone_number);
+        }
+        $user = $model->first();
+        if ($user) {
+            if ($user->status != 0) {
+                return Response::apiError('User sudah terdaftar', []);
+            }
+            $user->update($userReq);
+        } else {
+            $user = User::create($userReq);
+        }
+
+        $endTime = strtotime('+60 minutes');
+        $expired = date('Y-m-d H:i:s', $endTime);
+        $checkPayment = RegisterPayment::where('order_id', 'like', '%REGISTER%')->where('status', 'PENDING')->where('email', $user->email)->where('expired', '>', $expired)->first();
+        $linkInvoice = env('LINK_INVOICE').'/payment/method/';
+        if ($checkPayment) {
+            $payment = (object) [
+                'link' => $linkInvoice.$checkPayment->invoice_id,
+                'expired_date' => $checkPayment->expired,
+            ];
+        } else {
+            $setting = Setting::first();
+            $amount = ''.$setting->register_price.'';
+            $url = env('LINK_PAYMENT').'/merchant/requestInvoice/v2';
+            $code = uniqid('REGISTER-'.$user->id, false);
+            $body = ['json' => [
+                'merchantId' => env('MARCHANT_ID'),
+                'merchantKey' => env('MARCHANT_KEY'),
+                'orderId' => $code,
+                'amount' => $amount,
+                'orderInformations' => [[
+                    'productName' => 'register kormi',
+                    'quantity' => '1',
+                    'amount' => $amount,
+                    'nama' => $req->email,
+                ]],
+                'additionalInformation' => [
+                    'emailNotif' => $req->email,
+                ],
+                'vaExpired' => 120,
+            ]];
+            $curl = Curl::Request('POST', $url, $body);
+
+            $payment = (object) [];
+            if ($curl['status_code'] == '200') {
+                $content = json_decode($curl['content']);
+                $payment = (object) [
+                    'link' => $linkInvoice.$content->invoiceId,
+                    'expired_date' => $content->expiredDate,
+                ];
+                RegisterPayment::create([
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'invoice_id' => $content->invoiceId,
+                    'order_id' => $content->orderId,
+                    'status' => 'PENDING',
+                    'expired' => $content->expiredDate,
+                ]);
+            }
+        }
+
+        Otp::where('to', $req->phone_number)->where('proccess', 'register')->delete();
+        Otp::where('to', $req->email)->where('proccess', 'register')->delete();
+
+        return Response::api('Create App Succsess', ['payment' => $payment]);
+    }
+
+    public function updatemember($id, Request $req)
+    {
+        $this->validate($req, [
+            'email' => 'required|email||unique:users,email,'.$id,
+        ]);
+        $city = Cities::find($req->cities_id);
+
+        $member = User::where('id', $id)->first();
+        $member->name = $req->name;
+        $member->cities_id = $req->cities_id;
+        $member->provinces_id = $city->province_id;
+        $member->organitation_parent_id = $req->organitation_parent_id;
+        $member->email = $req->email;
+        $member->phone_number = $req->phone_number;
+        if (!is_null($req->password) && $req->password != '') {
+            $this->validate($req, [
+                'password' => 'min:8',
+            ]);
+            $member->password = Hash::make($req->password);
+        }
+        $update = $member->save();
+
+        if ($update) {
+            return Response::api('Update Member Succsess', $member);
+        }
+    }
+
+    public function generateUserNumber()
+    {
+        $all_user = User::whereNotNull("member_number")->get();
+        foreach ($all_user as $key => $value) {
+            $member = User::where('id', $value->id)->first();
+            $no_member = User::createNoMember($member->id);
+            $member->member_number = $no_member;
+            $update = $member->save();
+        }
+
+        if ($update) {
+            return Response::api('Update Member Succsess', count($all_user));
+        }
+    }
+
+//    public function createFromAdmin(Request $req)
+//    {
+//        $err = [];
+//        $success = [];
+//        $admin = Admin::find($req->auth->id);
+//        $users = \json_decode($req->users);
+//        $orders = [];
+//        $total_amount = 0;
+//        $setting = Setting::first();
+//        $usersNew = [];
+//        $messages = [];
+//        if (!is_array($users) || count($users) <= 0) {
+//            return Response::apiError('Members cannot be empty', []);
+//        }
+//
+//        $phone_numbers = collect($users)->pluck('phone_number')->toArray();
+//        $phone_numbers = array_unique($phone_numbers);
+//        if (count($phone_numbers) != count($users)) {
+//            return Response::apiError('Some member data is invalid', ['Terdapat nomor handphone yang sama'], 422);
+//        }
+//
+//        $emails = collect($users)->pluck('email')->toArray();
+//        $emails = array_unique($emails);
+//        if (count($emails) != count($users)) {
+//            return Response::apiError('Some member data is invalid', ['Terdapat email yang sama'], 422);
+//        }
+//
+//        $organitation_status_ids = collect($users)->pluck('organitation_status_id')->toArray();
+//        if (count($organitation_status_ids) != count($users)) {
+//            return Response::apiError('Some member data is invalid', ['Status organisasi semua anggota harus diisi'], 422);
+//        }
+//
+//        $new_users = [];
+//        foreach ($users as $key => $user) {
+//            $phone_number = $user->phone_number ? $user->phone_number : '';
+//            $saved_user = User::where('email', $user->email)->orWhere(function ($query) use ($phone_number) {
+//                if (!empty($phone_number)) {
+//                    $query->where('phone_number', $phone_number);
+//                }
+//            })->first();
+//            $user->create = true;
+//
+//            if ($saved_user) {
+//                $message = (object)[
+//                    "subject" => $user->name.' ('.$user->email.'/'.$phone_number.')',
+//                ];
+//                if ($saved_user->status != 0) {
+//                    $message->text = "sudah terdaftar";
+//                    $message->type = "error";
+//                    $err[] = '['.$user->name.' ('.$user->email.'/'.$phone_number.')] sudah terdaftar';
+//                    $messages[] = $message;
+//                    continue;
+//                } else {
+//                    $expired = date('Y-m-d H:i:s');
+//                    $user_payment = RegisterPayment::where("user_id", $saved_user->id)->where("status","PENDING")->where("expired",">",$expired)->first();
+//                    if($user_payment){
+//                        $message->text = "dalam proses pendaftaran";
+//                        $message->type = "process";
+//                        $messages[] = $message;
+//                        continue;
+//                    }
+//                    $user->create = false;
+//                    $user->update_id = $saved_user->id;
+//                }
+//            }
+//
+//            $new_users[] = $user;
+//        }
+//
+//        // if (count($err) > 0) {
+//        //     return Response::apiError('Some member data is invalid', $err, 422);
+//        // }
+//        foreach ($new_users as $key => $user) {
+//            $password = Common::generateRandomString();
+//            $phone_number = isset($user->phone_number) ? $user->phone_number : '';
+    //            $province = isset($user->province) && ($admin->role == 0 || $admin->role == 1) ? $user->province :$admin->provinces_id;
+//            $city = isset($user->city) && ($admin->role == 0 || $admin->role == 1 || $admin->role == 2) ? $user->city :$admin->cities_id;
+//
+//            $parent = isset($user->parent) && $admin->role == 0 ? $user->parent :$admin->organitation_parent_id;
+//            $userReq = [
+//                'name' => $user->name,
+//                'role' => 0,
+//                'status' => 0,
+//                'provinces_id' => $province,
+//                'organitation_parent_id' => $parent,
+//                'cities_id' => $city,
+//                'email' => $user->email ? $user->email : '',
+//                'organitation_status_id' => $user->organitation_status_id,
+//                'phone_number' => $phone_number,
+//                'password' => Hash::make($password),
+//            ];
+//
+//            if (!$user->create) {
+//                $user = User::where("id",$user->update_id)->update($userReq);
+//            } else {
+//                $user = User::create($userReq);
+//            }
+//            $total_amount = $total_amount + $setting->register_price;
+//            $usersNew[] = $user;
+//            $orders[] = [
+//                'productName' => 'register kormi',
+//                'quantity' => '1',
+//                'amount' => (string) $setting->register_price,
+//                'nama' => $user->email,
+//            ];
+//            $success[] = '['.$user->name.' ('.$user->email.'/'.$phone_number.')]';
+//        }
+//
+//        $endTime = strtotime('+60 minutes');
+//        $expired = date('Y-m-d H:i:s', $endTime);
+//        $linkInvoice = env('LINK_INVOICE').'/payment/method/';
+//
+//        $amount = ''.$total_amount.'';
+//        $url = env('LINK_PAYMENT').'/merchant/requestInvoice/v2';
+//        $code = uniqid('ADMRGS-'.$admin->id.'-', false);
+//        $body = ['json' => [
+//            'merchantId' => env('MARCHANT_ID'),
+//            'merchantKey' => env('MARCHANT_KEY'),
+//            'orderId' => $code,
+//            'amount' => $amount,
+//            'orderInformations' => $orders,
+//            'additionalInformation' => [
+//                'emailNotif' => $admin->email,
+//            ],
+//            'vaExpired' => 1200,
+//        ]];
+//        $curl = Curl::Request('POST', $url, $body);
+//
+//        $payment = (object) [];
+//        if ($curl['status_code'] == '200') {
+//            $content = json_decode($curl['content']);
+//            $payment = (object) [
+//                'link' => (empty($content->invoiceId)) ? "" :$linkInvoice.$content->invoiceId,
+//                'expired_date' => $content->expiredDate,
+//            ];
+//            foreach ($usersNew as $key => $value) {
+//                RegisterPayment::create([
+//                'user_id' => $value->id,
+//                'email' => $value->email,
+//                'invoice_id' => $content->invoiceId,
+//                'order_id' => $content->orderId,
+//                'status' => 'PENDING',
+//                'expired' => $content->expiredDate,
+//                ]);
+//            }
+//        }
+//
+//        return Response::api('Create App Succsess', ['payment' => $payment, "message_error" => $messages, "message_success" => $success]);
+//    }
+
+    public function createFromAdmin(Request $req)
+    {
+        $err = [];
+        $success = [];
+        $admin = Admin::find($req->auth->id);
+        $users = \json_decode($req->users);
+        $orders = [];
+        $total_amount = 0;
+        $setting = Setting::first();
+        $usersNew = [];
+        $messages = [];
+        if (!is_array($users) || count($users) <= 0) {
+            return Response::apiError('Members cannot be empty', []);
+        }
+
+        $phone_numbers = collect($users)->pluck('phone_number')->toArray();
+        $phone_numbers = array_unique($phone_numbers);
+        if (count($phone_numbers) != count($users)) {
+            return Response::apiError('Some member data is invalid', ['Terdapat nomor handphone yang sama'], 422);
+        }
+
+        $emails = collect($users)->pluck('email')->toArray();
+        $emails = array_unique($emails);
+        if (count($emails) != count($users)) {
+            return Response::apiError('Some member data is invalid', ['Terdapat email yang sama'], 422);
+        }
+
+        $organitation_status_ids = collect($users)->pluck('organitation_status_id')->toArray();
+        if (count($organitation_status_ids) != count($users)) {
+            return Response::apiError('Some member data is invalid', ['Status organisasi semua anggota harus diisi'], 422);
+        }
+
+        foreach ($users as $registerUser)
+        {
+            $phoneNumber = $registerUser->phone_number ?: '';
+
+            $user = User::where('email', $registerUser->email)->orWhere(function ($query) use ($phoneNumber) {
+                if (!empty($phoneNumber)) {
+                    $query->where('phone_number', $phoneNumber);
+                }
+            })->first();
+
+            if(!$user)
+                $user = new User;
+            // validasi klo user yg sudah ada
+            if($user->id)
+            {
+                $message = (object)[
+                    "subject" => $user->name.' ('.$user->email.'/'.$phoneNumber.')',
+                ];
+
+                // aktif
+                if ($user->status != 0) {
+                    $message->text = "sudah terdaftar";
+                    $message->type = "error";
+                    $err[] = '[' . $user->name . ' (' . $user->email . '/' . $phoneNumber . ')] sudah terdaftar';
+                    $messages[] = $message;
+                    continue;
+                }
+
+                // belum aktif
+                $expired = date('Y-m-d H:i:s');
+                $user_payment = RegisterPayment::where("user_id", $user->id)->where("status","PENDING")->where("expired",">",$expired)->first();
+                if($user_payment){
+                    $message->text = "dalam proses pendaftaran";
+                    $message->type = "process";
+                    $messages[] = $message;
+                    continue;
+                }
+
+            }
+
+            // klo user baru
+            if(!$user->id)
+            {
+                $password = Common::generateRandomString();
+                $province = isset($registerUser->province) && ($admin->role == 0 || $admin->role == 1) ? $registerUser->province :$admin->provinces_id;
+                $city = isset($registerUser->city) && ($admin->role == 0 || $admin->role == 1 || $admin->role == 2) ? $registerUser->city :$admin->cities_id;
+
+                $parent = isset($registerUser->parent) && $admin->role == 0 ? $registerUser->parent :$admin->organitation_parent_id;
+                $user->name = $registerUser->name;
+                $user->role = 0;
+                $user->status = 0;
+                $user->provinces_id = $province;
+                $user->organitation_parent_id = $parent;
+                $user->cities_id = $city;
+                $user->email = $registerUser->email ?: '';
+                $user->organitation_status_id = $registerUser->organitation_status_id;
+                $user->phone_number = $phoneNumber;
+                $user->password = Hash::make($password);
+            }
+
+            if(!$user->email)
+                continue;
+
+
+            $user->save();
+
+            $total_amount = $total_amount + $setting->register_price;
+
+            $orders[] = [
+                'productName' => 'register kormi',
+                'quantity' => '1',
+                'amount' => (string) $setting->register_price,
+                'nama' => $user->email,
+            ];
+
+            $success[] = '['.$user->name.' ('.$user->email.'/'.$phoneNumber.')]';
+        }
+
+        $endTime = strtotime('+60 minutes');
+        $expired = date('Y-m-d H:i:s', $endTime);
+        $linkInvoice = env('LINK_INVOICE').'/payment/method/';
+
+        $amount = ''.$total_amount.'';
+        $url = env('LINK_PAYMENT').'/merchant/requestInvoice/v2';
+        $code = uniqid('ADMRGS-'.$admin->id.'-', false);
+        $body = ['json' => [
+            'merchantId' => env('MARCHANT_ID'),
+            'merchantKey' => env('MARCHANT_KEY'),
+            'orderId' => $code,
+            'amount' => $amount,
+            'orderInformations' => $orders,
+            'additionalInformation' => [
+                'emailNotif' => 'fazaa.13@gmail.com',
+//                'emailNotif' => $admin->email,
+            ],
+            'vaExpired' => 1200,
+        ]];
+
+        $payment = [];
+        try{
+            $curl = Curl::Request('POST', $url, $body);
+
+            if ($curl['status_code'] == '200') {
+                $content = json_decode($curl['content']);
+                $payment = (object) [
+                    'link' => (empty($content->invoiceId)) ? "" :$linkInvoice.$content->invoiceId,
+                    'expired_date' => $content->expiredDate,
+                ];
+                foreach ($usersNew as $key => $value) {
+                    RegisterPayment::create([
+                        'user_id' => $value->id,
+                        'email' => $value->email,
+                        'invoice_id' => $content->invoiceId,
+                        'order_id' => $content->orderId,
+                        'status' => 'PENDING',
+                        'expired' => $content->expiredDate,
+                    ]);
+                }
+            }
+        }
+        catch (\Exception $e)
+        {
+            Log::channel('payment')->error("Payment error ".$e->getMessage());
+        }
+
+        return Response::api('Create App Succsess', ['payment' => $payment, "message_error" => $messages, "message_success" => $success]);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $update = [
+            'password' => Hash::make($request->password),
+        ];
+
+        $user = User::where('id', $request->auth->id)->first();
+        if (Hash::check($request->old_password, $user->password)) {
+            $user->update($update);
+            if (!$user) {
+                return Response::apiError('Failed Update Profile', []);
+            }
+
+            return Response::api('Update Profile Success', $user);
+        } else {
+            return Response::apiError('password lama salah', []);
+        }
+    }
+
+    public function profile(Request $request)
+    {
+        $user_id = $request->auth->id;
+        $user = User::find($user_id);
+        if (!$user) {
+            return Response::apiError('Not Found User', $user);
+        }
+
+        $province = (object) [];
+        $city = (object) [];
+        $district = (object) [];
+        $village = (object) [];
+        $organitation_parent_label = '';
+        if (!empty($user->provinces_id)) {
+            $province = Province::find($user->provinces_id);
+        }
+        if (!empty($user->organitation_parent_id)) {
+            $organitation_parent = MasterOrganitationParent::find($user->organitation_parent_id);
+            $organitation_parent_label = $organitation_parent ? $organitation_parent->parent_name : '';
+        }
+        if (!empty($user->cities_id)) {
+            $city = Cities::find($user->cities_id);
+        }
+        if (!empty($user->districts_id)) {
+            $district = District::find($user->districts_id);
+        }
+        if (!empty($user->villages_id)) {
+            $village = Village::find($user->villages_id);
+        }
+        $user->province = $province;
+        $user->city = $city;
+        $user->district = $district;
+        $user->village = $village;
+        $user->is_profile_completed = User::isProfileCompleted($user);
+        $user->organitation_parent_label = $organitation_parent_label;
+
+        return Response::api('Success Load Data Profile', $user);
+    }
+
+    public function profileJoinAdmin(Request $request)
+    {
+        $user_id = $request->auth->id;
+        $user = User::find($user_id);
+        if (!$user) {
+            return Response::apiError('Not Found User', $user);
+        }
+
+        $joinAdmin = JoinAdmin::where('user_id', $user_id)->first();
+        $status = isset($joinAdmin->status) ? $joinAdmin->status : -1;
+        $res = (object) [
+            'current_agency' => $user->current_agency,
+            'organizational_experience' => $user->organizational_experience,
+            'status_code' => $status,
+            'status_text' => JoinAdmin::statusText($status),
+        ];
+
+        return Response::api('Success Load Data', $res);
+    }
+
+    /** List Member */
+    public function listMember(Request $request)
+    {
+        $perPage = env('TOTAL_PER_PAGE', 20);
+        if ($request->limit) {
+            $perPage = $request->limit;
+        }
+        $admin = Admin::find($request->auth->id);
+
+        $sort = User::sortedValue($request->sort_key, $request->sort_condition);
+        $search = '%'.$request->search.'%';
+        $status = $request->status;
+
+        $Data = User::query()
+            ->where(function ($query) use ($search) {
+                if (!empty($search)) {
+                    $query->Where('name', 'like', $search);
+                    $query->orWhere('email', 'like', $search);
+                }
+            })
+            ->where(function ($query) use ($status) {
+                if (User::checkStatus($status)) {
+                    $query->where('status', $status);
+                }
+            })
+            // ->where("organitation_parent_id",$admin->organitation_parent_id)
+            ->where(function ($query) use ($admin) {
+                $filterParent = 1;
+                switch ($admin->role) {
+                    case '0':
+                        $filterParent = 0;
+                    break;
+                    case '1':
+                        break;
+                    case '2':
+                        $query->where('provinces_id', $admin->provinces_id);
+                        break;
+                    case '3':
+                        $query->where('cities_id', $admin->cities_id);
+                        break;
+                    case '4':
+                        break;
+                    case '5':
+                        $query->where('provinces_id', $admin->provinces_id);
+                        break;
+
+                    default:
+                        // code...
+                        break;
+                }
+                if($filterParent == 1){
+                    if(!empty($admin->organitation_parent_id)){
+                        $query->where('organitation_parent_id', $admin->organitation_parent_id);
+                    }
+                }
+            })
+            ->orderBy($sort->key, $sort->condition)->paginate($perPage);
+        for ($i = 0; $i < count($Data); ++$i) {
+            $Data[$i]['status_label'] = User::statusLabel($Data[$i]['status']);
+            $Data[$i]['role_label'] = User::roleLabel($Data[$i]['role']);
+            $province = (object) [];
+            $city = (object) [];
+            $organitation_status = (object) [];
+            $organitation_parent = (object) [];
+            if (!empty($Data[$i]['provinces_id'])) {
+                $province = Province::find($Data[$i]['provinces_id']);
+            }
+            if (!empty($Data[$i]['cities_id'])) {
+                $city = Cities::find($Data[$i]['cities_id']);
+            }
+            if (!empty($Data[$i]['organitation_parent_id'])) {
+                $organitation_parent = MasterOrganitationParent::find($Data[$i]['organitation_parent_id']);
+            }
+            if (!empty($Data[$i]['organitation_status_id'])) {
+                $organitation_status = MasterOrganitationStatus::find($Data[$i]['organitation_status_id']);
+            }
+            $Data[$i]['province'] = $province;
+            $Data[$i]['city'] = $city;
+            $Data[$i]['commission'] = '';
+            $Data[$i]['organitation_parent'] = $organitation_parent;
+            $Data[$i]['organitation_status'] = $organitation_status;
+            $create_by = "personal (mobile)"; 
+            $checkPayment = RegisterPayment::where('user_id', $Data[$i]['id'])->orderBy('updated_at', "DESC")->first();
+            if($checkPayment){
+                $check = explode("-",$checkPayment->order_id);
+                if($check[0] == "ADMRGS")
+                    $create_by = "admin (Web Cms)";
+            }
+            $Data[$i]["create_by"] = $create_by;
+        }
+
+        if (!$Data) {
+            return Response::apiError('Not found data', []);
+        }
+
+        $res = [
+            'status' => User::status(),
+            'record' => $Data,
+        ];
+
+        return Response::api('Load member success', $res);
+    }
+
+    /** Detail Member */
+    public function detailMember($id)
+    {
+        $user = User::where('id', $id)->first();
+        $province = (object) [];
+        $city = (object) [];
+        $district = (object) [];
+        $village = (object) [];
+        $organitation_status = (object) [];
+        $organitation_parent = (object) [];
+        if (!empty($user->provinces_id)) {
+            $province = Province::find($user->provinces_id);
+        }
+        if (!empty($user->cities_id)) {
+            $city = Cities::find($user->cities_id);
+        }
+        if (!empty($user->organitation_parent_id)) {
+            $organitation_parent = MasterOrganitationParent::find($user->organitation_parent_id);
+        }
+        if (!empty($user->organitation_status_id)) {
+            $organitation_status = MasterOrganitationStatus::find($user->organitation_status_id);
+        }
+        if (!empty($user->districts_id)) {
+            $district = District::find($user->districts_id);
+        }
+        if (!empty($user->villages_id)) {
+            $village = Village::find($user->villages_id);
+        }
+        $user->province = $province;
+        $user->city = $city;
+        $user->district = $district;
+        $user->village = $village;
+        $user->organitation_parent = $organitation_parent;
+        $user->organitation_status = $organitation_status;
+        $user->commission = '';
+        $user->status_label = User::statusLabel($user->status);
+        $user->role_label = User::roleLabel($user->role);
+
+        return Response::api('Load member succsess', $user);
+    }
+
+    /** List Admin */
+    public function listJoinAdmin(Request $request)
+    {
+        $perPage = env('TOTAL_PER_PAGE', 20);
+        $search = '%'.$request->search.'%';
+        $sort = User::sortedValue($request->sort_key, $request->sort_condition);
+        $data = joinAdmin::join('users', 'join_admin.user_id', '=', 'users.id')
+                            ->where(function ($query) use ($search) {
+                                $query->orWhere('users.name', 'like', $search);
+                                $query->orWhere('users.email', 'like', $search);
+                            })->orderBy('users.'.$sort->key, $sort->condition)->paginate($perPage);
+
+        if (!$data) {
+            return Response::apiError('Not found data', []);
+        }
+
+        for ($i = 0; $i < count($data); ++$i) {
+            $data[$i]['user'] = User::find($data[$i]['user_id']);
+        }
+
+        return Response::api('Load admin success', $data);
+    }
+}

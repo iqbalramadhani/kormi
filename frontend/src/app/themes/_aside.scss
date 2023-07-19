@@ -1,0 +1,135 @@
+.aside {
+    background-color: $aside-bg-color;
+}
+
+.aside-menu {
+    background-color: $aside-bg-color;
+}
+
+.aside-menu {
+	.menu-nav {
+		>.menu-item {
+			>.menu-link {
+				padding: 0px 24px;
+				.menu-text {
+					color: #000000;
+					font-size: 13px;
+				}
+				.menu-icon {
+					&.svg-icon svg g [fill] {
+						fill: blue;
+					}
+                }
+			}
+			>.menu-heading {
+				.menu-text {
+					color: #000000;
+					font-size: 13px;
+				}
+				.menu-icon {
+					&.svg-icon svg g [fill] {
+						fill: blue;
+					}
+				}
+			}
+			.menu-submenu {
+				.menu-item.menu-item-active {
+					>.menu-heading {
+						background-color: $active-menu-bg-color;
+				border-left: solid 3px blue;
+					}
+					>.menu-link {
+						background-color: $active-menu-bg-color;
+				border-left: solid 3px blue;
+                    }
+				}
+            }
+            
+		}
+		>.menu-item.menu-item-active {
+			>.menu-heading {
+				background-color: $active-menu-bg-color;
+				border-left: solid 3px blue;
+				.menu-text {
+					color: #000000;
+					font-size: 16px;
+				}
+				.menu-icon {
+					&.svg-icon svg g [fill] {
+						fill: blue;
+					}
+				}
+			}
+			>.menu-link {
+				background-color: $active-menu-bg-color;
+				border-left: solid 3px blue;
+				.menu-text {
+					color: #000000;
+					font-size: 13px;
+				}
+				.menu-icon {
+					&.svg-icon svg g [fill] {
+						fill: blue;
+					}
+                }
+            }
+		}
+		>.menu-item.menu-item-open {
+			>.menu-heading {
+				background-color: $active-menu-bg-color;
+				border-left: solid 3px blue;
+			}
+			>.menu-link {
+				background-color: $active-menu-bg-color;
+				border-left: solid 3px blue;
+            }
+		}
+		.menu-item.menu-item-open {
+			>.menu-submenu {
+				background-color: $active-menu-bg-color;
+			}
+			>.menu-inner {
+				background-color: $active-menu-bg-color
+            }
+		}
+    }
+}
+
+.menu-item {
+	.size-font {
+		margin: 0;
+	}
+}
+
+.aside-menu {
+	.menu-nav {
+		>.menu-item {
+			&:not(.menu-item-parent) {
+				&:not(.menu-item-open) {
+					&:not(.menu-item-here) {
+						&:not(.menu-item-active) {
+							&:hover {
+								>.menu-link {
+                                    background-color: $active-menu-bg-color;
+                                    >.menu-text {
+                                        color: #000000;
+                                    }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+.aside-logout {
+	margin-top: 10vh !important;
+}
+
+@media only screen and (max-height: 768px) {
+	.aside-logout {
+		margin-top: 0 !important;
+	}
+}

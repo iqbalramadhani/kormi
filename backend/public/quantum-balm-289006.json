@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "quantum-balm-289006",
+  "private_key_id": "c4b70b4d6ab34faa85b1bfbe16d813ce9c2d3abb",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDBgs9Mg+nVBFRs\nMg3dtPS1G/XeBFWG9bep2n1YqZ7D5Y/Avc8MBUPvSoEWsoTqeokvdHAaOXux9vvc\nGsfs4LUWYTGFHycRIdfvXluuKiXUAiAe87X1jyMk5QTKDgNnFu4T9LkElki2g2jd\neLMjK8ejTZKRypMfc5EWHslj0SM+2e9YDr1+l1yTBwAIPEeJwO2XaNfGsUQ4ZBiP\nSuLzmwaAvTmDAafpXhoc/dkWXRIpxVTWdksPDGYY6IiGdxZj8utsFqVEtQaSGclW\ne7UPscBqq6Sj0mMf3uSWSUMU95F+4guVD0OdJp6jnPOp02un3JcfdKvdUulzLiaw\n54ErXJElAgMBAAECggEABmxAU66UMg8S+0VdCvUQ4zsCmeQkb5aTykY3f1wf6ioi\nL5hNOT2qf9SF/NoficXX7FSNzP0H80P6n5de9+iMcin3Mg8y5YFtUKNd4SXCfCs2\n5DgcG8KsvLKCSm+VItSSweRPSMzxLGensSQqs/nlxjCSsxaZdAOKtwR+FDtSk2kr\nHtz8MtKlwPi9LkD3QdMzZg017bwhxS+zT7J/iDpu4TQnpSddG1YbLtG7SdE6FwBG\n8Z2wT4AzYuB+IycmxjA/ctMm5YtVkPIWKsPCMNFlk4Fet9S7TZFwir0Jh9f69XwJ\nVSHp+k/TFKVadrnBAxN6uyYbtkivO00uFO3kIPeJaQKBgQDiOhOMin0daj3tJuYV\n0VxCDGq9OBfV+EqLtW+9nNKTLJdAhby/Km0ts+sUxdatFL5247kGhIBaHFrbuQug\nEHiM7WpR+oxiuOBPDYmsIy6htO7RFAYw3CGAxzxA0KQeRywX0yj/Sv0UOp+BADri\nJiSWMNNZBHkbYVfNISeg2jRk7QKBgQDa+nxnq+POosyHEXQk+c2XehdwNeoiZIcP\nDhKq276j6ubwczh2Y4gXSXRvVp0PhpxszdurUaxWAL7d4/PP2Ksa53ZPYgWsfrvz\nWBtCnHlsVh9sHrw0WQNBAtp9PCzBCu5gILoIZDEV2BDD4xcNg20eQC1b3OTOkk3B\n942d5ijOGQKBgQDKKCO3/zl2w6268nvBG2laDEaF+E40gr/6wJOt2SnDIqG2osvb\n+EnAAXsdAP2phVP+YdjBnj4kSBpZJq7gxlczeCT+ROqWfabUfcB89qOBFXIjm8U8\nfDnkHiYVtVwzQl6Am82S9KvbG9fVKyNzW6puHAuBDKI8eWxAflQvRU50sQKBgAPb\nGUmyCybeUv+l3Qexpl8edT8yk9bbMk2fj9CWYfr87egZ/0qGYiUW1AgJ3GYjlqmL\nzmxr2b8B8Fpz4x0r0Yd9v+WR8kuhR6n3STOZEcJImfELcYDyeE4ywKon3xnfGWdz\n7BKtwPeDgHgSjZtdTxSTSLkvYJAKn3fk5gd7wAgxAoGBAK29IoRTQY65uTN4w048\n9vb/DuFF9nWdQLiTmucKyzWz+UmsYfvL0EG81zRPXlf9SWK/gOYtii/EPWJD8XM1\nBwLmeqLKaVK+xeivVc8WLCff0NpFY1HKefGD4krF0iMVE6nEQDRZ+QE4LD1jfI8K\nKHbgJS4vxs+gN4y+gEtrIejV\n-----END PRIVATE KEY-----\n",
+  "client_email": "pgd-bucket@quantum-balm-289006.iam.gserviceaccount.com",
+  "client_id": "117012280768084719389",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/pgd-bucket%40quantum-balm-289006.iam.gserviceaccount.com"
+}

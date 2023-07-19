@@ -1,0 +1,47 @@
+.btn-primary-light {
+    background-color: #E2F0FF !important;
+    color: #3D9CFC !important;
+}
+
+.btn-unggah {
+    background-color: #C0EEEB !important;
+    color: #3D9CFC !important;
+}
+
+.btn-unduh {
+    background-color: #C4C4C4 !important;
+    color: #FFFFFF !important;
+}
+
+.label-anggota {
+    background-color: #17C191 !important;
+    color: white !important;
+}
+
+.label-pengurus {
+    background-color: #FFA800 !important;
+    color: white !important;
+}
+
+.label-pelatih {
+    background-color: #2E5AAC !important;
+    color: white !important;
+}
+
+.label-error {
+    background-color: red !important;
+    color: white !important;
+}
+
+.label-draft {
+    background-color: #C4C4C4 !important;
+    color: #FFFFFF !important;
+}
+
+thead {
+    background-color: #F3F6F9 !important;
+}
+
+td {
+    font-size: 11px;
+}
